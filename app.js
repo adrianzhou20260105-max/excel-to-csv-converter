@@ -34,7 +34,6 @@ const previewTableBody = document.getElementById("preview-table-body");
 
 // Initialize application
 document.addEventListener("DOMContentLoaded", () => {
-  initTheme();
   setupEventListeners();
 });
 
@@ -269,6 +268,13 @@ function selectSheet(sheetName) {
       btn.className = "sheet-item-btn w-full flex items-center justify-between p-3.5 rounded-xl border text-left transition-all text-xs font-medium border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 cursor-pointer";
     }
   });
+
+  // Reset single sheet download button state when switching sheets to avoid UI race states
+  btnDownloadSingle.disabled = false;
+  const origHtml = btnDownloadSingle.getAttribute("data-orig-html");
+  if (origHtml) {
+    btnDownloadSingle.innerHTML = origHtml;
+  }
 
   // Display a brief "loading preview" status in table
   previewTableHead.innerHTML = "";

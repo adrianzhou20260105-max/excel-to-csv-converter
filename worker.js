@@ -254,21 +254,35 @@ function getSanitizedSheet(sheet) {
 
     const cell = newSheet[key];
     if (cell) {
-      // Clone the cell object to avoid mutating the original cached workbook sheet
-      const newCell = { ...cell };
-      
-      if (newCell.w !== undefined) {
-        const valStr = String(newCell.w);
-        if (/^[=\+\-\@]/.test(valStr)) {
-          newCell.w = "'" + valStr;
-        }
-      } else if (newCell.v !== undefined) {
-        const valStr = String(newCell.v);
-        if (/^[=\+\-\@]/.test(valStr)) {
-          newCell.v = "'" + valStr;
+      let needsSanitization = false;
+      let wStr = "";
+      let vStr = "";
+
+      if (cell.w !== undefined) {
+        wStr = String(cell.w);
+        if (/^[=\+\-\@]/.test(wStr)) {
+          needsSanitization = true;
         }
       }
-      newSheet[key] = newCell;
+
+      if (cell.v !== undefined) {
+        vStr = String(cell.v);
+        if (/^[=\+\-\@]/.test(vStr)) {
+          needsSanitization = true;
+        }
+      }
+
+      // Only allocate memory for clone if cell contains formula injection characters (reduces GC pressure)
+      if (needsSanitization) {
+        const newCell = { ...cell };
+        if (newCell.w !== undefined && /^[=\+\-\@]/.test(wStr)) {
+          newCell.w = "'" + wStr;
+        }
+        if (newCell.v !== undefined && /^[=\+\-\@]/.test(vStr)) {
+          newCell.v = "'" + vStr;
+        }
+        newSheet[key] = newCell;
+      }
     }
   }
 

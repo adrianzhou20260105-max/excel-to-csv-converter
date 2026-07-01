@@ -5,7 +5,20 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SheetCast - Excel 批量转 CSV 在线工具 (开源/免上传)</title>
   <meta name="description" content="一个纯前端实现的 Excel 批量转 CSV 工具。支持多 Sheet 一键打包 ZIP 下载，完美保留格式，防止大数科学计数法，支持中文不乱码，100% 本地处理，保障数据隐私安全。">
-  
+  <!-- Theme Initialization (Executed inline to prevent flashing light-theme before DOM render) -->
+  <script>
+    (function() {
+      const savedTheme = localStorage.getItem("theme");
+      const systemPrefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+      if (savedTheme === "dark" || (!savedTheme && systemPrefersDark)) {
+        document.documentElement.classList.add("dark");
+        document.documentElement.classList.remove("light");
+      } else {
+        document.documentElement.classList.add("light");
+        document.documentElement.classList.remove("dark");
+      }
+    })();
+  </script>
   <!-- FontAwesome Icons with SRI Integrity Validation -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
   

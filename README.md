@@ -10,7 +10,7 @@
 *   **📂 多 Sheet 批量转换**：自动解析 Excel（支持 `.xlsx`, `.xls`, `.xlsm`, `.xlsb`）中的所有工作表（Sheets），可一键打包 ZIP 压缩包下载，也可单独下载某一个 Sheet。
 *   **💎 防止数字精度丢失**：防止大数（如身份证号、手机号、银行卡号等）因自动类型转换丢失前导 `0` 或被强行转换为科学计数法（如 `1.23E+17`）。
 *   **🇨🇳 原生 UTF-8 With BOM 编码**：专为中文及跨平台 Excel 设计，生成的 CSV 能够直接在微软 Excel 中双击打开而不产生乱码。
-*   **⚡ 极简轻量级，零构建门槛**：基于原生 HTML5 + CSS3 + Javascript (ES Modules) 并通过 CDN 引入依赖，无需搭建复杂的 `Node.js` 构建环境，克隆项目后双击 `index.html` 即可在本地完美运行！
+*   **⚡ 极简轻量级，支持完全离线运行**：库依赖已全部本地化存放于 `lib` 目录中，无需任何外部依赖环境，直接双击 `index.html` 即可在 100% 断网离线环境下完美运行！
 *   **🌗 现代清新双色主题**：设计精美的用户界面，内置光感自适应与手动切换的深浅色模式，采用卡片式精细排版和微交互动画。
 
 ---
@@ -26,7 +26,7 @@
 
 ## 🛠️ 技术栈
 
-*   **样式库**：[Tailwind CSS (Play CDN)](https://tailwindcss.com/) — 快速构建现代化的响应式界面。
+*   **样式库**：[Tailwind CSS](https://tailwindcss.com/) — 本地通过 Tailwind CLI 预编译的静态 CSS，消除 Play CDN 带来的运行时编译开销和布局闪烁。
 *   **Excel 解析引擎**：[SheetJS (xlsx)](https://github.com/SheetJS/sheetjs) — 强悍的客户端 Excel 解析库。
 *   **压缩包生成器**：[JSZip](https://stuk.github.io/jszip/) — 纯 JS 实现的客户端 ZIP 文件打包工具。
 *   **图标库**：[FontAwesome 6](https://fontawesome.com/) — 精美矢量功能图标。
