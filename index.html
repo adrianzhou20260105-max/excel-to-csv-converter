@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SheetCast - Excel 批量转 CSV 在线工具 (开源/免上传)</title>
+  <meta name="description" content="一个纯前端实现的 Excel 批量转 CSV 工具。支持多 Sheet 一键打包 ZIP 下载，完美保留格式，防止大数科学计数法，支持中文不乱码，100% 本地处理，保障数据隐私安全。">
+  
+  <!-- Tailwind CSS Play CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Google Fonts - Outfit & Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Custom Styles -->
+  <link rel="stylesheet" href="style.css">
+  
+  <style>
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    }
+    h1, h2, h3, .font-outfit {
+      font-family: 'Outfit', sans-serif;
+    }
+  </style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 min-h-screen flex flex-col theme-transition">
+
+  <!-- Navigation / Header -->
+  <header class="border-b border-slate-200/80 dark:border-slate-800/80 bg-white/80 dark:bg-slate-900/80 backdrop-blur sticky top-0 z-40 theme-transition">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-500 to-blue-500 flex items-center justify-center shadow-lg shadow-emerald-500/20 dark:shadow-emerald-500/5">
+          <i class="fa-solid fa-file-csv text-white text-xl"></i>
+        </div>
+        <div>
+          <span class="text-xl font-bold font-outfit tracking-tight">
+            Sheet<span class="text-emerald-500">Cast</span>
+          </span>
+          <span class="ml-2 px-2 py-0.5 text-xs font-semibold bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400 rounded-full border border-emerald-200/50 dark:border-emerald-800/50">Pro</span>
+        </div>
+      </div>
+      
+      <div class="flex items-center space-x-4">
+        <!-- Theme Toggle Button -->
+        <button id="theme-toggle" class="w-10 h-10 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-400 transition-colors cursor-pointer" title="切换主题">
+          <i class="fa-solid fa-moon dark:hidden"></i>
+          <i class="fa-solid fa-sun hidden dark:block text-amber-400"></i>
+        </button>
+        
+        <!-- GitHub Link -->
+        <a href="https://github.com" target="_blank" rel="noopener noreferrer" class="flex items-center space-x-2 px-4 py-2 rounded-xl bg-slate-900 text-white hover:bg-slate-800 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-100 font-medium text-sm transition-all shadow-sm">
+          <i class="fa-brands fa-github text-base"></i>
+          <span>GitHub 开源</span>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 w-full">
+    
+    <!-- Hero / Title -->
+    <div class="text-center max-w-3xl mx-auto mb-10">
+      <h1 class="text-4xl sm:text-5xl font-extrabold tracking-tight mb-4">
+        Excel 批量转 CSV，<span class="gradient-text">一键秒级生成</span>
+      </h1>
+      <p class="text-slate-500 dark:text-slate-400 text-lg sm:text-xl font-light">
+        100% 浏览器本地解析，文件不上传服务器。完美保留原本单元格显示内容，有效防止乱码和大数变科学计数法。
+      </p>
+    </div>
+
+    <!-- Drag & Drop Zone Container -->
+    <div class="max-w-4xl mx-auto">
+      <div id="dropzone" class="border-2 border-dashed border-slate-300 dark:border-slate-800 rounded-3xl p-12 bg-white dark:bg-slate-900 text-center transition-all duration-300 shadow-sm cursor-pointer hover:border-emerald-500 hover:shadow-md group relative">
+        <input type="file" id="file-input" class="hidden" accept=".xlsx,.xls,.xlsm,.xlsb">
+        
+        <div class="flex flex-col items-center justify-center space-y-4">
+          <!-- Icon -->
+          <div class="w-16 h-16 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 flex items-center justify-center text-emerald-500 group-hover:scale-110 transition-transform duration-300">
+            <i class="fa-solid fa-cloud-arrow-up text-3xl"></i>
+          </div>
+          
+          <div>
+            <p class="text-lg font-semibold text-slate-700 dark:text-slate-200">
+              拖拽 Excel 文件到这里，或 <span class="text-emerald-500 hover:text-emerald-600 transition-colors underline decoration-2 underline-offset-4">点击浏览文件</span>
+            </p>
+            <p class="text-sm text-slate-400 dark:text-slate-500 mt-2">
+              支持 .xlsx, .xls, .xlsm, .xlsb 格式，支持多个 Sheet
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- File Loading Status / Spinner -->
+      <div id="loading-spinner" class="hidden flex-col items-center justify-center p-8 mt-6 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm">
+        <div class="animate-spin rounded-full h-10 w-10 border-4 border-emerald-500 border-t-transparent"></div>
+        <p class="text-sm text-slate-500 dark:text-slate-400 mt-3 font-medium">正在读取 Excel 文件并解析 Sheets，请稍候...</p>
+      </div>
+
+      <!-- Error Toast -->
+      <div id="error-message" class="hidden mt-6 p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 dark:bg-rose-950/20 dark:border-rose-900/50 dark:text-rose-400 flex items-center space-x-3">
+        <i class="fa-solid fa-circle-exclamation text-lg flex-shrink-0"></i>
+        <span class="text-sm font-medium" id="error-text">解析文件失败，请检查文件是否损坏或格式是否正确。</span>
+      </div>
+
+      <!-- File Details Card (Visible after loading) -->
+      <div id="file-info-card" class="hidden mt-8 p-6 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-3xl shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div class="flex items-center space-x-4">
+          <div class="w-12 h-12 rounded-xl bg-blue-50 dark:bg-blue-950/30 flex items-center justify-center text-blue-500">
+            <i class="fa-solid fa-file-excel text-2xl"></i>
+          </div>
+          <div>
+            <h3 id="info-filename" class="font-semibold text-slate-800 dark:text-slate-100 text-base line-clamp-1">文件名.xlsx</h3>
+            <p class="text-xs text-slate-400 dark:text-slate-500 mt-1">
+              大小: <span id="info-filesize">0 KB</span> | Sheet 数量: <span id="info-sheetcount">0</span>
+            </p>
+          </div>
+        </div>
+        
+        <div class="flex items-center gap-3 w-full md:w-auto">
+          <button id="btn-download-zip" class="w-full md:w-auto px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-xl font-medium text-sm hover:from-emerald-600 hover:to-teal-700 transition-all shadow-md shadow-emerald-500/10 dark:shadow-emerald-500/2 flex items-center justify-center space-x-2 cursor-pointer">
+            <i class="fa-solid fa-file-archive"></i>
+            <span>打包 ZIP 下载所有 CSV</span>
+          </button>
+          
+          <button id="btn-reset" class="w-full md:w-auto px-4 py-2.5 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl font-medium text-sm transition-all flex items-center justify-center space-x-2 cursor-pointer">
+            <i class="fa-solid fa-rotate-left"></i>
+            <span>重新上传</span>
+          </button>
+        </div>
+      </div>
+      
+      <!-- Workspace Container (Tabs + Preview) -->
+      <div id="workspace" class="hidden mt-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+        <!-- Left: Sheet List / Selector -->
+        <div class="lg:col-span-1 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-3xl p-5 shadow-sm flex flex-col max-h-[600px]">
+          <h3 class="font-bold text-slate-800 dark:text-slate-100 text-base mb-4 flex items-center space-x-2">
+            <i class="fa-solid fa-list-ul text-emerald-500"></i>
+            <span>选择要预览/转化的 Sheet</span>
+          </h3>
+          
+          <!-- Sheet Items Scrollable List -->
+          <div id="sheet-list-container" class="flex-grow overflow-y-auto space-y-2 pr-1">
+            <!-- Dynamic Sheet Items -->
+          </div>
+        </div>
+        
+        <!-- Right: Sheet Preview & Individual Download -->
+        <div class="lg:col-span-2 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-3xl p-6 shadow-sm flex flex-col max-h-[600px]">
+          <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800/60 pb-4 mb-4">
+            <div>
+              <h3 id="preview-sheet-name" class="font-bold text-slate-800 dark:text-slate-100 text-lg flex items-center space-x-2">
+                <i class="fa-solid fa-table text-blue-500"></i>
+                <span>Sheet 预览</span>
+              </h3>
+              <p class="text-xs text-slate-400 dark:text-slate-500 mt-1">
+                预览前 15 行数据（共 <span id="preview-total-rows">0</span> 行，<span id="preview-total-cols">0</span> 列）
+              </p>
+            </div>
+            
+            <button id="btn-download-single" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium text-xs transition-colors flex items-center space-x-2 cursor-pointer shadow-sm">
+              <i class="fa-solid fa-download"></i>
+              <span>导出当前 CSV</span>
+            </button>
+          </div>
+          
+          <!-- Table Container -->
+          <div class="flex-grow overflow-auto border border-slate-150 dark:border-slate-800 rounded-xl table-preview-container bg-slate-50/50 dark:bg-slate-950/20">
+            <table class="w-full text-left border-collapse text-xs">
+              <thead id="preview-table-head" class="bg-slate-100 dark:bg-slate-800/60 sticky top-0 font-semibold text-slate-700 dark:text-slate-300">
+                <!-- Dynamic headers -->
+              </thead>
+              <tbody id="preview-table-body" class="divide-y divide-slate-150 dark:divide-slate-800 text-slate-600 dark:text-slate-300">
+                <!-- Dynamic body rows -->
+              </tbody>
+            </table>
+          </div>
+          
+          <!-- Small tips -->
+          <div class="mt-3 flex items-center justify-between text-xs text-slate-400 dark:text-slate-500">
+            <span class="flex items-center gap-1">
+              <i class="fa-solid fa-info-circle"></i>
+              <span>悬停于单元格上可查看完整内容</span>
+            </span>
+            <span>仅供预览，下载的 CSV 将包含完整数据</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Product Features / Why SheetCast -->
+    <section class="mt-24 border-t border-slate-200 dark:border-slate-800/80 pt-16">
+      <h2 class="text-2xl sm:text-3xl font-extrabold text-center tracking-tight mb-12">
+        为什么选择 <span class="gradient-text">SheetCast</span> ？
+      </h2>
+      
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <!-- Feature 1 -->
+        <div class="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800/50 p-6 rounded-2xl shadow-sm hover:shadow-md transition-shadow">
+          <div class="w-10 h-10 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 flex items-center justify-center text-emerald-500 mb-4">
+            <i class="fa-solid fa-shield-halved text-lg"></i>
+          </div>
+          <h3 class="font-bold text-slate-800 dark:text-slate-100 text-base mb-2">100% 数据隐私安全</h3>
+          <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+            所有文件处理和 CSV 转换均在您浏览器的本地 Sandbox 内执行。没有任何数据被上传至网络服务器，绝对保障机密企业财务、个人信息等敏感数据的隐私。
+          </p>
+        </div>
+        
+        <!-- Feature 2 -->
+        <div class="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800/50 p-6 rounded-2xl shadow-sm hover:shadow-md transition-shadow">
+          <div class="w-10 h-10 rounded-lg bg-blue-50 dark:bg-blue-950/40 flex items-center justify-center text-blue-500 mb-4">
+            <i class="fa-solid fa-arrow-down-9-1 text-lg"></i>
+          </div>
+          <h3 class="font-bold text-slate-800 dark:text-slate-100 text-base mb-2">防止数字/身份证精度丢失</h3>
+          <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+            传统转换常导致超长数字（如身份证号、信用卡、电话号码等）被截断、高位 0 丢失或自动转化为科学计数法。我们默认提取 Excel 单元格显示文本，锁定格式不失真。
+          </p>
+        </div>
+        
+        <!-- Feature 3 -->
+        <div class="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800/50 p-6 rounded-2xl shadow-sm hover:shadow-md transition-shadow">
+          <div class="w-10 h-10 rounded-lg bg-cyan-50 dark:bg-cyan-950/40 flex items-center justify-center text-cyan-500 mb-4">
+            <i class="fa-solid fa-language text-lg"></i>
+          </div>
+          <h3 class="font-bold text-slate-800 dark:text-slate-100 text-base mb-2">原生 UTF-8 With BOM 编码</h3>
+          <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+            专为 Excel 用户优化。生成的 CSV 文件内置微软标准的 UTF-8 BOM 字节标识，直接双击使用 Excel 打开，中文及其他非英文字符绝不显示乱码。
+          </p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="border-t border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-slate-900 text-slate-400 dark:text-slate-500 py-8 theme-transition text-xs">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-4">
+      <div>
+        <p>© 2026 SheetCast. 基于 MIT 协议开源。完全在客户端运行的效率利器。</p>
+      </div>
+      <div class="flex items-center space-x-6">
+        <a href="https://github.com" target="_blank" class="hover:text-emerald-500 transition-colors">GitHub Repository</a>
+        <a href="#" class="hover:text-emerald-500 transition-colors">隐私政策</a>
+        <a href="#" class="hover:text-emerald-500 transition-colors">使用条款</a>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Core Libraries -->
+  <!-- SheetJS (XLSX) for reading Excel -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <!-- JSZip for zipping files -->
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  
+  <!-- Main Application Script -->
+  <script type="module" src="app.js"></script>
+
+</body>
+</html>
