@@ -1,0 +1,29 @@
+{
+  "name": "excel-to-csv-converter",
+  "version": "1.0.0",
+  "description": "> **Excel 批量转 CSV 在线工具** — 100% 本地浏览器解析，文件不经过任何服务器，极致隐私保护，多 Sheet 一键打包 ZIP 下载！",
+  "main": "app.js",
+  "directories": {
+    "lib": "lib"
+  },
+  "scripts": {
+    "build": "npx @tailwindcss/cli -i input.css -o style.css --minify",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/adrianzhou20260105-max/excel-to-csv-converter.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/adrianzhou20260105-max/excel-to-csv-converter/issues"
+  },
+  "homepage": "https://github.com/adrianzhou20260105-max/excel-to-csv-converter#readme",
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.3.2",
+    "tailwindcss": "^4.3.2"
+  }
+}

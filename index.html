@@ -6,11 +6,8 @@
   <title>SheetCast - Excel 批量转 CSV 在线工具 (开源/免上传)</title>
   <meta name="description" content="一个纯前端实现的 Excel 批量转 CSV 工具。支持多 Sheet 一键打包 ZIP 下载，完美保留格式，防止大数科学计数法，支持中文不乱码，100% 本地处理，保障数据隐私安全。">
   
-  <!-- Tailwind CSS Play CDN -->
-  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-  
-  <!-- FontAwesome Icons -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- FontAwesome Icons with SRI Integrity Validation -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
   
   <!-- Google Fonts - Outfit & Inter -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -253,11 +250,11 @@
     </div>
   </footer>
 
-  <!-- Core Libraries -->
+  <!-- Core Libraries (Loaded locally for security, performance and 100% offline capability) -->
   <!-- SheetJS (XLSX) for reading Excel -->
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="lib/xlsx.full.min.js"></script>
   <!-- JSZip for zipping files -->
-  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script src="lib/jszip.min.js"></script>
   
   <!-- Main Application Script -->
   <script type="module" src="app.js"></script>

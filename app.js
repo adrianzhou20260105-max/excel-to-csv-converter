@@ -1,10 +1,10 @@
 /**
  * SheetCast - Excel to CSV Converter
- * Core application logic
+ * Main thread UI controller (communicates with Web Worker)
  */
 
 // State management
-let currentWorkbook = null;
+let converterWorker = null;
 let currentFileName = "";
 let currentFileExt = "";
 let activeSheetName = "";
@@ -104,17 +104,65 @@ function setupEventListeners() {
   btnReset.addEventListener("click", resetAppState);
 
   // Download all as ZIP
-  btnDownloadZip.addEventListener("click", downloadAllAsZip);
+  btnDownloadZip.addEventListener("click", requestZipDownload);
 
   // Download active sheet as CSV
-  btnDownloadSingle.addEventListener("click", downloadActiveSheetAsCSV);
+  btnDownloadSingle.addEventListener("click", requestSingleSheetDownload);
 }
 
 // ==========================================
-// 3. File Processing & SheetJS Integration
+// 3. Web Worker Communication & Lifecycle
+// ==========================================
+function initWorker() {
+  // Terminate any existing worker to prevent memory leaks and clean state
+  if (converterWorker) {
+    converterWorker.terminate();
+  }
+
+  // Instantiate worker
+  converterWorker = new Worker("worker.js");
+  
+  // Set up receiver for worker messages
+  converterWorker.onmessage = function (e) {
+    const { type, payload } = e.data;
+
+    switch (type) {
+      case "PARSE_COMPLETE":
+        onParseComplete(payload.sheetsMeta, payload.firstSheetName);
+        break;
+
+      case "PREVIEW_DATA":
+        onPreviewReceived(payload);
+        break;
+
+      case "EXPORT_SINGLE_COMPLETE":
+        onExportSingleComplete(payload.fileName, payload.blob);
+        break;
+
+      case "EXPORT_ZIP_COMPLETE":
+        onExportZipComplete(payload.fileName, payload.blob);
+        break;
+
+      case "ERROR":
+        onWorkerError(payload.message);
+        break;
+
+      default:
+        console.warn(`未知的 Worker 消息类型: ${type}`);
+    }
+  };
+
+  converterWorker.onerror = function (err) {
+    console.error("Worker Global Error:", err);
+    showError("后台解析子线程加载失败，请刷新网页重试。");
+    showLoading(false);
+  };
+}
+
+// ==========================================
+// 4. File Processing Trigger
 // ==========================================
 function handleFileSelection(file) {
-  // Verify file type
   const fileName = file.name;
   const lastDot = fileName.lastIndexOf(".");
   const ext = fileName.substring(lastDot).toLowerCase();
@@ -130,103 +178,80 @@ function handleFileSelection(file) {
   currentFileName = fileName.substring(0, lastDot);
   currentFileExt = ext;
 
+  // Initialize fresh worker for file parsing
+  initWorker();
+
   const reader = new FileReader();
   
-  reader.onload = function(e) {
-    try {
-      const data = new Uint8Array(e.target.result);
-      
-      // Read workbook using SheetJS with configurations to preserve cell formats
-      const workbook = XLSX.read(data, {
-        type: "array",
-        cellNF: true,    // Retain number formats (dates, currencies, custom formatters)
-        cellText: true,  // Retain the formatted text values (prevents scientific notation for big ints)
-        cellStyles: true // Retain styles if present
-      });
-
-      processWorkbook(workbook, file.size);
-    } catch (err) {
-      console.error(err);
-      showError("解析 Excel 文件失败，该文件可能已损坏，或者格式不受支持。");
-      showLoading(false);
-    }
+  reader.onload = function (e) {
+    const arrayBuffer = e.target.result;
+    
+    // Send arrayBuffer to the worker (transfer ownership to save memory)
+    converterWorker.postMessage(
+      {
+        type: "PARSE_FILE",
+        payload: { arrayBuffer }
+      },
+      [arrayBuffer] // Transferred arrayBuffer, main thread can no longer read it directly
+    );
   };
 
-  reader.onerror = function() {
+  reader.onerror = function () {
     showError("读取文件错误，请重试。");
     showLoading(false);
   };
 
+  // Keep file size formatted for display
+  let sizeText = "";
+  if (file.size < 1024) sizeText = file.size + " B";
+  else if (file.size < 1024 * 1024) sizeText = (file.size / 1024).toFixed(2) + " KB";
+  else sizeText = (file.size / (1024 * 1024)).toFixed(2) + " MB";
+
+  infoFilename.textContent = file.name;
+  infoFilesize.textContent = sizeText;
+
   reader.readAsArrayBuffer(file);
 }
 
-function processWorkbook(workbook, fileSizeInBytes) {
-  currentWorkbook = workbook;
-  
-  // Format file size
-  let sizeText = "";
-  if (fileSizeInBytes < 1024) sizeText = fileSizeInBytes + " B";
-  else if (fileSizeInBytes < 1024 * 1024) sizeText = (fileSizeInBytes / 1024).toFixed(2) + " KB";
-  else sizeText = (fileSizeInBytes / (1024 * 1024)).toFixed(2) + " MB";
+// ==========================================
+// 5. Worker Message Receivers (Callbacks)
+// ==========================================
+function onParseComplete(sheetsMeta, firstSheetName) {
+  infoSheetcount.textContent = sheetsMeta.length;
 
-  // Update file details card
-  infoFilename.textContent = currentFileName + currentFileExt;
-  infoFilesize.textContent = sizeText;
-  infoSheetcount.textContent = workbook.SheetNames.length;
-
-  // Toggle visible elements
   showLoading(false);
   dropzone.classList.add("hidden");
   fileInfoCard.classList.remove("hidden");
   workspace.classList.remove("hidden");
 
-  // Populate sheet list
-  renderSheetList();
+  // Render Left Column (Sheet selection buttons)
+  renderSheetList(sheetsMeta);
 
-  // Select first sheet by default
-  if (workbook.SheetNames.length > 0) {
-    selectSheet(workbook.SheetNames[0]);
+  // Automatically select and request preview for the first sheet
+  if (firstSheetName) {
+    selectSheet(firstSheetName);
   }
 }
 
-// ==========================================
-// 4. Workspace & UI Rendering
-// ==========================================
-function renderSheetList() {
+function renderSheetList(sheetsMeta) {
   sheetListContainer.innerHTML = "";
 
-  currentWorkbook.SheetNames.forEach((sheetName) => {
-    const sheet = currentWorkbook.Sheets[sheetName];
-    
-    // Count rows/cols from ref
-    let rows = 0;
-    let cols = 0;
-    if (sheet["!ref"]) {
-      const range = XLSX.utils.decode_range(sheet["!ref"]);
-      rows = range.e.r - range.s.r + 1;
-      cols = range.e.c - range.s.c + 1;
-    }
-
-    // Create item button
+  sheetsMeta.forEach((meta) => {
     const button = document.createElement("button");
-    button.className = `sheet-item-btn w-full flex items-center justify-between p-3.5 rounded-xl border text-left transition-all text-xs font-medium cursor-pointer ${
-      sheetName === activeSheetName
-        ? "border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 font-semibold"
-        : "border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300"
-    }`;
-    button.setAttribute("data-sheetname", sheetName);
+    button.className = `sheet-item-btn w-full flex items-center justify-between p-3.5 rounded-xl border text-left transition-all text-xs font-medium cursor-pointer border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300`;
+    button.setAttribute("data-sheetname", meta.name);
     
     button.innerHTML = `
       <div class="flex items-center space-x-2.5 min-w-0 pr-2">
-        <i class="fa-solid fa-sheet-plastic flex-shrink-0 text-sm opacity-80"></i>
-        <span class="truncate block">${escapeHtml(sheetName)}</span>
+        <i class="fa-solid fa-sheet-plastic flex-shrink-0 text-sm opacity-80 text-emerald-500"></i>
+        <span class="truncate block">${escapeHtml(meta.name)}</span>
       </div>
       <div class="flex-shrink-0 text-[10px] text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md">
-        ${rows}R × ${cols}C
+        ${meta.rows}R × ${meta.cols}C
       </div>
     `;
 
-    button.addEventListener("click", () => selectSheet(sheetName));
+    button.addEventListener("click", () => selectSheet(meta.name));
     sheetListContainer.appendChild(button);
   });
 }
@@ -234,7 +259,7 @@ function renderSheetList() {
 function selectSheet(sheetName) {
   activeSheetName = sheetName;
   
-  // Highlight active button in list
+  // Highlight active button in the DOM list
   const buttons = sheetListContainer.querySelectorAll(".sheet-item-btn");
   buttons.forEach(btn => {
     const btnSheetName = btn.getAttribute("data-sheetname");
@@ -245,50 +270,40 @@ function selectSheet(sheetName) {
     }
   });
 
-  // Render preview
-  renderPreview();
+  // Display a brief "loading preview" status in table
+  previewTableHead.innerHTML = "";
+  previewTableBody.innerHTML = `<tr><td class="p-8 text-center text-slate-400 font-light"><i class="fa-solid fa-spinner animate-spin mr-2"></i>正在加载预览数据...</td></tr>`;
+
+  // Request preview from worker
+  converterWorker.postMessage({
+    type: "GET_PREVIEW",
+    payload: { sheetName }
+  });
 }
 
-function renderPreview() {
-  const sheet = currentWorkbook.Sheets[activeSheetName];
-  previewSheetName.querySelector("span").textContent = activeSheetName;
+function onPreviewReceived(payload) {
+  const { sheetName, isEmpty, headers, rows, hasMoreCols, totalRows, totalCols } = payload;
 
-  if (!sheet || !sheet["!ref"]) {
-    // Empty sheet handling
-    previewTotalRows.textContent = "0";
-    previewTotalCols.textContent = "0";
+  // Protect against race conditions (ignore message if user already switched sheets)
+  if (sheetName !== activeSheetName) return;
+
+  previewSheetName.querySelector("span").textContent = sheetName;
+  previewTotalRows.textContent = totalRows || 0;
+  previewTotalCols.textContent = totalCols || 0;
+
+  if (isEmpty) {
     previewTableHead.innerHTML = `<tr><th class="p-4 text-center text-slate-400">表格内容为空</th></tr>`;
     previewTableBody.innerHTML = `<tr><td class="p-8 text-center text-slate-400 font-light">该 Sheet 内没有可显示的数据。</td></tr>`;
     return;
   }
 
-  const range = XLSX.utils.decode_range(sheet["!ref"]);
-  const totalRows = range.e.r - range.s.r + 1;
-  const totalCols = range.e.c - range.s.c + 1;
-  
-  previewTotalRows.textContent = totalRows;
-  previewTotalCols.textContent = totalCols;
-
-  // Maximum columns & rows to render in preview for performance reasons
-  const maxPreviewRows = 15;
-  const maxPreviewCols = 15;
-
-  const startRow = range.s.r;
-  const endRow = Math.min(startRow + maxPreviewRows - 1, range.e.r);
-  
-  const startCol = range.s.c;
-  const endCol = Math.min(startCol + maxPreviewCols - 1, range.e.c);
-  const hasMoreCols = range.e.c > endCol;
-
-  // Generate Header Row
+  // Render Table Header Row (A, B, C...)
   let headHtml = "<tr>";
-  // Top-left index header
   headHtml += `<th class="p-2.5 border-b border-r border-slate-200 dark:border-slate-800 text-center w-12 bg-slate-100 dark:bg-slate-800 text-slate-500 select-none font-semibold">#</th>`;
   
-  for (let c = startCol; c <= endCol; c++) {
-    const colName = XLSX.utils.encode_col(c);
+  headers.forEach((colName) => {
     headHtml += `<th class="p-2.5 border-b border-r border-slate-200 dark:border-slate-800 text-center font-semibold bg-slate-100/80 dark:bg-slate-800/80 min-w-[120px] max-w-[200px] truncate text-slate-600 dark:text-slate-300">${colName}</th>`;
-  }
+  });
   
   if (hasMoreCols) {
     headHtml += `<th class="p-2.5 border-b border-slate-200 dark:border-slate-800 text-center font-semibold bg-slate-100/50 dark:bg-slate-800/50 text-slate-400 italic">更多...</th>`;
@@ -296,104 +311,83 @@ function renderPreview() {
   headHtml += "</tr>";
   previewTableHead.innerHTML = headHtml;
 
-  // Generate Body Rows
+  // Render Table Body Rows (with standard title tooltip to prevent layout jitter)
   let bodyHtml = "";
-  for (let r = startRow; r <= endRow; r++) {
+  rows.forEach((row) => {
     bodyHtml += `<tr class="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">`;
+    bodyHtml += `<td class="p-2 border-b border-r border-slate-150 dark:border-slate-800 text-center bg-slate-50 dark:bg-slate-900/60 font-medium text-slate-500 select-none w-12">${row.index}</td>`;
     
-    // Row index label (e.g. 1, 2, 3...)
-    bodyHtml += `<td class="p-2 border-b border-r border-slate-150 dark:border-slate-800 text-center bg-slate-50 dark:bg-slate-900/60 font-medium text-slate-500 select-none w-12">${r + 1}</td>`;
-    
-    for (let c = startCol; c <= endCol; c++) {
-      const cellAddress = XLSX.utils.encode_cell({ r: r, c: c });
-      const cell = sheet[cellAddress];
-      let val = "";
-      
-      if (cell) {
-        // Prefer cell.w (formatted display string) over raw cell.v
-        val = cell.w !== undefined ? cell.w : (cell.v !== undefined ? cell.v : "");
-      }
-      
-      const escapedVal = escapeHtml(val);
+    row.cells.forEach((cellVal) => {
+      const escapedVal = escapeHtml(cellVal);
       bodyHtml += `<td class="p-2 border-b border-r border-slate-150 dark:border-slate-800 truncate text-slate-600 dark:text-slate-300 max-w-[200px]" title="${escapedVal}">${escapedVal}</td>`;
-    }
-    
+    });
+
     if (hasMoreCols) {
       bodyHtml += `<td class="p-2 border-b border-slate-150 dark:border-slate-800 text-slate-400/70 italic text-center select-none">...</td>`;
     }
-    
     bodyHtml += "</tr>";
-  }
+  });
   previewTableBody.innerHTML = bodyHtml;
 }
 
 // ==========================================
-// 5. CSV Conversion & Downloading
+// 6. Action Triggers (Export commands to Worker)
 // ==========================================
-function convertSheetToCSV(sheet) {
-  if (!sheet) return "";
-  
-  // SheetJS conversion utility
-  return XLSX.utils.sheet_to_csv(sheet, {
-    blankrows: true, // Preserve spacing of rows
+function requestSingleSheetDownload() {
+  if (!converterWorker || !activeSheetName) return;
+
+  btnDownloadSingle.disabled = true;
+  const originalHtml = btnDownloadSingle.innerHTML;
+  btnDownloadSingle.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> <span>正在导出...</span>`;
+
+  // Store original HTML back to the DOM element after download complete callback
+  btnDownloadSingle.setAttribute("data-orig-html", originalHtml);
+
+  converterWorker.postMessage({
+    type: "EXPORT_SINGLE",
+    payload: {
+      sheetName: activeSheetName,
+      fileNamePrefix: currentFileName
+    }
   });
 }
 
-function getCsvBlob(csvContent) {
-  // Prepends UTF-8 BOM byte marker so Excel opens it correctly with Chinese characters
-  const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
-  return new Blob([bom, csvContent], { type: "text/csv;charset=utf-8;" });
-}
-
-function downloadActiveSheetAsCSV() {
-  if (!currentWorkbook || !activeSheetName) return;
-
-  const sheet = currentWorkbook.Sheets[activeSheetName];
-  const csvContent = convertSheetToCSV(sheet);
-  const blob = getCsvBlob(csvContent);
-  
-  // Sanitize sheet name for filenames
-  const safeSheetName = activeSheetName.replace(/[\/\\?%*:|"<>\s]/g, "_");
-  const fileName = `${currentFileName}_${safeSheetName}.csv`;
-  
+function onExportSingleComplete(fileName, blob) {
   saveBlob(blob, fileName);
+
+  // Restore button state
+  btnDownloadSingle.disabled = false;
+  const origHtml = btnDownloadSingle.getAttribute("data-orig-html");
+  if (origHtml) {
+    btnDownloadSingle.innerHTML = origHtml;
+  }
 }
 
-function downloadAllAsZip() {
-  if (!currentWorkbook) return;
+function requestZipDownload() {
+  if (!converterWorker) return;
 
   btnDownloadZip.disabled = true;
   const originalHtml = btnDownloadZip.innerHTML;
   btnDownloadZip.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> <span>正在生成 ZIP...</span>`;
 
-  const zip = new JSZip();
+  btnDownloadZip.setAttribute("data-orig-html", originalHtml);
 
-  currentWorkbook.SheetNames.forEach((sheetName) => {
-    const sheet = currentWorkbook.Sheets[sheetName];
-    const csvContent = convertSheetToCSV(sheet);
-    const blob = getCsvBlob(csvContent);
-    
-    const safeSheetName = sheetName.replace(/[\/\\?%*:|"<>\s]/g, "_");
-    const csvFileName = `${safeSheetName}.csv`;
-    
-    zip.file(csvFileName, blob);
+  converterWorker.postMessage({
+    type: "EXPORT_ZIP",
+    payload: {
+      fileNamePrefix: currentFileName
+    }
   });
+}
 
-  zip.generateAsync({ type: "blob" })
-    .then((zipBlob) => {
-      const zipName = `${currentFileName}_CSVs.zip`;
-      saveBlob(zipBlob, zipName);
-      
-      // Reset button state
-      btnDownloadZip.disabled = false;
-      btnDownloadZip.innerHTML = originalHtml;
-    })
-    .catch((err) => {
-      console.error(err);
-      alert("生成 ZIP 压缩包失败！");
-      btnDownloadZip.disabled = false;
-      btnDownloadZip.innerHTML = originalHtml;
-    });
+function onExportZipComplete(fileName, blob) {
+  saveBlob(blob, fileName);
+
+  btnDownloadZip.disabled = false;
+  const origHtml = btnDownloadZip.getAttribute("data-orig-html");
+  if (origHtml) {
+    btnDownloadZip.innerHTML = origHtml;
+  }
 }
 
 function saveBlob(blob, filename) {
@@ -404,22 +398,39 @@ function saveBlob(blob, filename) {
   document.body.appendChild(link);
   link.click();
   
-  // Clean up
+  // Clean up ObjectURL reference
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
 }
 
 // ==========================================
-// 6. Helpers & App UI State Control
+// 7. Error Handling & State Reset
 // ==========================================
+function onWorkerError(message) {
+  showError(`转化数据失败: ${message}`);
+  showLoading(false);
+
+  // Reset button states in case they were loading
+  btnDownloadSingle.disabled = false;
+  const singleHtml = btnDownloadSingle.getAttribute("data-orig-html");
+  if (singleHtml) btnDownloadSingle.innerHTML = singleHtml;
+
+  btnDownloadZip.disabled = false;
+  const zipHtml = btnDownloadZip.getAttribute("data-orig-html");
+  if (zipHtml) btnDownloadZip.innerHTML = zipHtml;
+}
+
 function resetAppState() {
-  currentWorkbook = null;
+  if (converterWorker) {
+    converterWorker.terminate();
+    converterWorker = null;
+  }
+
   currentFileName = "";
   currentFileExt = "";
   activeSheetName = "";
   fileInput.value = "";
   
-  // Toggle visibility back to default upload
   dropzone.classList.remove("hidden");
   fileInfoCard.classList.add("hidden");
   workspace.classList.add("hidden");
